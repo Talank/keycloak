@@ -2,10 +2,6 @@ name: Keycloak Documentation
 
 on:
   push:
-    branches-ignore:
-      - main
-      - dependabot/**
-      - quarkus-next
   pull_request:
   workflow_dispatch:
 
@@ -21,6 +17,9 @@ defaults:
   run:
     shell: bash
 
+permissions:
+  contents: read
+
 jobs:
 
   conditional:
@@ -28,8 +27,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       documentation: ${{ steps.conditional.outputs.documentation }}
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - id: conditional
         uses: ./.github/actions/conditional
@@ -38,11 +40,11 @@ jobs:
 
   build:
     name: Build
-    if: ${{ needs.conditional.outputs.documentation == 'true' }}
-    runs-on: ubuntu-latest
+    if: always()
+    runs-on: ${{ matrix.os }}
     needs: conditional
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - id: setup-java
         name: Setup Java
@@ -60,19 +62,26 @@ jobs:
 
       - id: upload-keycloak-documentation
         name: Upload Keycloak documentation
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: keycloak-documentation
           path: docs/documentation/dist/target/*.zip
           retention-days: 1
 
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+      fail-fast: false
   external-links:
     name: External links check
-    if: ${{ needs.conditional.outputs.documentation == 'true' }}
-    runs-on: ubuntu-latest
+    if: always()
+    runs-on: ${{ matrix.os }}
     needs: conditional
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - id: setup-java
         name: Setup Java
@@ -88,6 +97,13 @@ jobs:
         run: |
           ./mvnw install -Dtest=ExternalLinksTest -am -pl docs/documentation/tests -e -Pdocumentation 
 
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+      fail-fast: false
   check:
     name: Status Check - Keycloak Documentation
     if: always()
@@ -96,7 +112,7 @@ jobs:
       - build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - uses: ./.github/actions/status-check
         with:
           jobs: ${{ toJSON(needs) }}
