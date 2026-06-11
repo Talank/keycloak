@@ -1,12 +1,6 @@
 name: Keycloak Documentation
 
 on:
-  push:
-    branches-ignore:
-      - main
-      - dependabot/**
-      - quarkus-next
-  pull_request:
   workflow_dispatch:
 
 env:
@@ -38,7 +32,7 @@ jobs:
 
   build:
     name: Build
-    if: ${{ needs.conditional.outputs.documentation == 'true' }}
+    if: always()
     runs-on: ubuntu-latest
     needs: conditional
     steps:
@@ -66,9 +60,11 @@ jobs:
           path: docs/documentation/dist/target/*.zip
           retention-days: 1
 
+    strategy:
+      fail-fast: false
   external-links:
     name: External links check
-    if: ${{ needs.conditional.outputs.documentation == 'true' }}
+    if: always()
     runs-on: ubuntu-latest
     needs: conditional
     steps:
@@ -88,6 +84,8 @@ jobs:
         run: |
           ./mvnw install -Dtest=ExternalLinksTest -am -pl docs/documentation/tests -e -Pdocumentation 
 
+    strategy:
+      fail-fast: false
   check:
     name: Status Check - Keycloak Documentation
     if: always()

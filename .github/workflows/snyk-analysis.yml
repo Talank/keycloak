@@ -1,6 +1,6 @@
 name: Snyk
 
-on: 
+on:
   workflow_dispatch:
 
 env:
@@ -14,7 +14,7 @@ jobs:
   analysis:
     name: Analysis of Quarkus and Operator
     runs-on: ubuntu-latest
-    if: github.repository == 'keycloak/keycloak'
+    if: always()
     steps:
       - uses: actions/checkout@v4
 
@@ -24,7 +24,8 @@ jobs:
       - uses: snyk/actions/setup@master
 
       - name: Check for vulnerabilities in Quarkus
-        run: snyk test --policy-path=${GITHUB_WORKSPACE}/.github/snyk/.snyk --all-projects --prune-repeated-subdependencies --exclude=tests --sarif-file-output=quarkus-report.sarif quarkus/deployment
+        run: snyk test --policy-path=${GITHUB_WORKSPACE}/.github/snyk/.snyk --all-projects 
+          --prune-repeated-subdependencies --exclude=tests --sarif-file-output=quarkus-report.sarif quarkus/deployment
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -49,3 +50,5 @@ jobs:
         with:
           sarif_file: operator-report.sarif
           category: snyk-operator-report
+    strategy:
+      fail-fast: false

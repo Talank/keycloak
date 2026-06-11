@@ -1,11 +1,6 @@
 name: Keycloak Operator CI
 
 on:
-  push:
-    branches-ignore:
-      - main
-      - dependabot/**
-  pull_request:
   workflow_dispatch:
 
 env:
@@ -96,6 +91,8 @@ jobs:
               -Dtest.operator.custom.image=custom-keycloak:${{ env.version_local }} \
               -Dkc.operator.keycloak.image-pull-policy=Never
 
+    strategy:
+      fail-fast: false
   test-remote:
     name: Test remote
     runs-on: ubuntu-latest
@@ -143,6 +140,8 @@ jobs:
               -Dtest.operator.custom.image=custom-keycloak:${{ env.version_remote }} \
               --no-transfer-progress -Dtest.operator.deployment=remote
 
+    strategy:
+      fail-fast: false
   test-olm:
     name: Test OLM installation
     runs-on: ubuntu-latest
@@ -199,7 +198,7 @@ jobs:
           kubectl apply -f src/test/resources/example-realm.yaml
           # Wait for the CRs to be ready
           ./scripts/check-examples-installed.sh
-          
+
       - name: Single namespace cleanup
         working-directory: operator
         run: |
@@ -208,13 +207,13 @@ jobs:
           kubectl delete -f src/test/resources/example-tls-secret.yaml
           kubectl delete -f src/test/resources/example-keycloak.yaml
           kubectl delete -f src/test/resources/example-realm.yaml
-      
+
       - name: Arrange OLM test installation for all namespaces
         working-directory: operator
         run: |
           kubectl patch csv keycloak-operator.v86400000.0.0 --type merge --patch '{"spec": {"installModes": [{"type": "AllNamespaces","supported": true}]}}'
           kubectl patch operatorgroup og --type json --patch '[{"op":"remove","path":"/spec/targetNamespaces"}]'
-       
+
       - name: Deploy an example Keycloak in a different namespace and wait for it to be ready
         working-directory: operator
         run: |
