@@ -1,11 +1,6 @@
 name: Keycloak CI
 
 on:
-  push:
-    branches-ignore:
-      - main
-      - dependabot/**
-  pull_request:
   workflow_dispatch:
 
 env:
@@ -69,7 +64,7 @@ jobs:
 
   unit-tests:
     name: Base UT
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     needs: build
     timeout-minutes: 30
     steps:
@@ -100,14 +95,21 @@ jobs:
         with:
           job-id: unit-tests
 
+    strategy:
+      matrix:
+        os: &id001
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+      fail-fast: false
   base-integration-tests:
     name: Base IT
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 100
     strategy:
       matrix:
         group: [1, 2, 3, 4, 5, 6]
+        os: *id001
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -142,7 +144,7 @@ jobs:
   adapter-integration-tests:
     name: Adapter IT
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -155,7 +157,8 @@ jobs:
         run: ./mvnw install -DskipTests -f distribution/pom.xml
 
       - name: Build app servers
-        run: ./mvnw install -DskipTests -Pbuild-app-servers -f testsuite/integration-arquillian/servers/app-server/pom.xml
+        run: ./mvnw install -DskipTests -Pbuild-app-servers -f 
+          testsuite/integration-arquillian/servers/app-server/pom.xml
 
       - name: Run adapter tests
         run: |
@@ -180,10 +183,14 @@ jobs:
         with:
           job-id: adapter-integration-tests
 
+    strategy:
+      matrix:
+        os: *id001
+      fail-fast: false
   adapter-integration-tests-strict-cookies:
     name: Adapter IT Strict Cookies
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -196,7 +203,8 @@ jobs:
         run: ./mvnw install -DskipTests -f distribution/pom.xml
 
       - name: Build app servers
-        run: ./mvnw install -DskipTests -Pbuild-app-servers -f testsuite/integration-arquillian/servers/app-server/pom.xml
+        run: ./mvnw install -DskipTests -Pbuild-app-servers -f 
+          testsuite/integration-arquillian/servers/app-server/pom.xml
 
       - name: Run adapter tests
         run: |
@@ -221,6 +229,10 @@ jobs:
         with:
           job-id: adapter-integration-tests-strict-cookies
 
+    strategy:
+      matrix:
+        os: *id001
+      fail-fast: false
   quarkus-unit-tests:
     name: Quarkus UT
     needs: [build, conditional]
@@ -228,7 +240,7 @@ jobs:
     timeout-minutes: 15
     strategy:
       matrix:
-        os: [ ubuntu-latest, windows-latest ]
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -352,8 +364,7 @@ jobs:
           fi
 
       - name: Build with JDK
-        run:
-          ./mvnw install -e -DskipTests -DskipExamples
+        run: ./mvnw install -e -DskipTests -DskipExamples
 
       - name: Upload JVM Heapdumps
         if: always()
@@ -376,7 +387,7 @@ jobs:
     name: Login Theme v1 tests
     needs: build
     timeout-minutes: 100
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -407,11 +418,15 @@ jobs:
         with:
           job-id: jdk-integration-tests-${{ matrix.os }}-${{ matrix.dist }}-${{ matrix.version }}
 
+    strategy:
+      matrix:
+        os: *id001
+      fail-fast: false
   volatile-sessions-tests:
     name: Volatile Sessions IT
     needs: [build, conditional]
-    if: needs.conditional.outputs.ci-store == 'true'
-    runs-on: ubuntu-latest
+    if: always()
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
@@ -444,21 +459,26 @@ jobs:
           job-id: store-integration-tests-${{ matrix.variant }}
 
       - name: EC2 Maven Logs
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: store-it-mvn-logs
           path: .github/scripts/ansible/files
 
+    strategy:
+      matrix:
+        os: *id001
+      fail-fast: false
   external-infinispan-tests:
     name: External Infinispan IT
-    needs: [ build, conditional ]
-    if: needs.conditional.outputs.ci-store == 'true'
-    runs-on: ubuntu-latest
+    needs: [build, conditional]
+    if: always()
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 150
     strategy:
       matrix:
-        variant: [ "clusterless,multi-site" ]
+        variant: ["clusterless,multi-site"]
+        os: *id001
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -493,8 +513,8 @@ jobs:
   auroradb-integration-tests:
     name: AuroraDB IT
     needs: conditional
-    if: needs.conditional.outputs.ci-aurora == 'true'
-    runs-on: ubuntu-latest
+    if: always()
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
@@ -508,21 +528,21 @@ jobs:
         run: |
           AWS_REGION=us-east-1
           echo "AWS Region: ${AWS_REGION}"
-          
+
           aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws configure set region ${AWS_REGION}
-          
+
           AURORA_CLUSTER_NAME="gh-action-$(git rev-parse --short HEAD)-${{ github.run_id }}-${{ github.run_attempt }}"
           PASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 13; echo)
           echo "::add-mask::${PASS}"
-          
+
           echo "aurora-cluster-name=${AURORA_CLUSTER_NAME}" >> $GITHUB_OUTPUT
           echo "aurora-cluster-password=${PASS}" >> $GITHUB_OUTPUT
           echo "region=${AWS_REGION}" >> $GITHUB_OUTPUT
           curl --fail-with-body https://truststore.pki.rds.amazonaws.com/${AWS_REGION}/${AWS_REGION}-bundle.pem -o aws.pem
           PROPS+=' -Dkeycloak.connectionsJpa.jdbcParameters=\"?ssl=true&sslmode=verify-ca&sslrootcert=/opt/keycloak/aws.pem\"'
-          
+
           echo "maven_properties=${PROPS}" >> $GITHUB_OUTPUT
 
       - id: aurora-create
@@ -539,11 +559,11 @@ jobs:
           AWS_REGION=${{ steps.aurora-init.outputs.region }}
           EC2_CLUSTER_NAME=keycloak_$(git rev-parse --short HEAD)
           echo "ec2_cluster=${EC2_CLUSTER_NAME}" >> $GITHUB_OUTPUT
-          
+
           git archive --format=zip --output /tmp/keycloak.zip $GITHUB_REF
           zip -u /tmp/keycloak.zip aws.pem
           tar -C ~/ -czvf m2.tar.gz .m2
- 
+
           cd .github/scripts/ansible
           python3 -m venv .venv
           source .venv/bin/activate
@@ -562,7 +582,7 @@ jobs:
           EC2_CLUSTER_NAME=${{ steps.ec2-create.outputs.ec2_cluster }}
           AWS_REGION=${{ steps.aurora-init.outputs.region }}
           PROPS='${{ steps.aurora-init.outputs.maven_properties }}'
-          
+
           PROPS+=" -Dauth.server.db.host=${{ steps.aurora-create.outputs.endpoint }} -Dkeycloak.connectionsJpa.password=${{ steps.aurora-init.outputs.aurora-cluster-password }}"
           PROPS+=" -Djdbc.mvn.groupId=software.amazon.jdbc -Djdbc.mvn.artifactId=aws-advanced-jdbc-wrapper -Djdbc.mvn.version=2.3.1 -Djdbc.driver.tmp.dir=target/unpacked/keycloak-${{ env.old-version }}/providers"
 
@@ -593,7 +613,7 @@ jobs:
           job-id: migration-tests-${{ env.old-version }}-aurora-postgres
 
       - name: EC2 Maven Logs
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: auroraDB-migration-tests-mvn-logs
@@ -606,13 +626,13 @@ jobs:
           AWS_REGION=${{ steps.aurora-init.outputs.region }}
           PROPS='${{ steps.aurora-init.outputs.maven_properties }}'          
           PROPS+=" -Dauth.server.db.host=${{ steps.aurora-create.outputs.endpoint }} -Dkeycloak.connectionsJpa.password=${{ steps.aurora-init.outputs.aurora-cluster-password }}"
-          
+
           TESTS=`testsuite/integration-arquillian/tests/base/testsuites/suite.sh database`
           echo "Tests: $TESTS"
-          
+
           cd .github/scripts/ansible
           ./mvn_ec2_runner.sh ${AWS_REGION} ${EC2_CLUSTER_NAME} "test -B ${{ env.SUREFIRE_RETRY }} -Pauth-server-quarkus -Pdb-aurora-postgres $PROPS -Dtest=$TESTS -pl testsuite/integration-arquillian/tests/base 2>&1 | misc/log/trimmer.sh"
-          
+
           # Copy returned surefire-report directories to workspace root to ensure they're discovered
           results=(files/keycloak/results/*)
           rsync -a $results/* ../../../
@@ -636,7 +656,7 @@ jobs:
           job-id: aurora-integration-tests
 
       - name: EC2 Maven Logs
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: aurora-integration-tests-mvn-logs
@@ -660,14 +680,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+    strategy:
+      matrix:
+        os: *id001
+      fail-fast: false
   store-integration-tests:
     name: Store IT
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 75
     strategy:
       matrix:
         db: [postgres, mysql, oracle, mssql, mariadb]
+        os: *id001
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -779,7 +804,7 @@ jobs:
   clustering-integration-tests:
     name: Clustering IT
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     env:
       MAVEN_OPTS: -Xmx1024m
@@ -811,6 +836,10 @@ jobs:
         with:
           job-id: clustering-integration-tests
 
+    strategy:
+      matrix:
+        os: *id001
+      fail-fast: false
   fips-unit-tests:
     name: FIPS UT
     runs-on: ubuntu-latest
@@ -830,7 +859,8 @@ jobs:
         uses: ./.github/actions/unit-test-setup
 
       - name: Run crypto tests
-        run: docker run --rm --workdir /github/workspace -v "${{ github.workspace }}":"/github/workspace" -v "$HOME/.m2":"/root/.m2" registry.access.redhat.com/ubi8/ubi:latest .github/scripts/run-fips-ut.sh
+        run: docker run --rm --workdir /github/workspace -v "${{ github.workspace }}":"/github/workspace" -v 
+          "$HOME/.m2":"/root/.m2" registry.access.redhat.com/ubi8/ubi:latest .github/scripts/run-fips-ut.sh
 
       - name: Upload JVM Heapdumps
         if: always()
@@ -867,7 +897,9 @@ jobs:
           jdk-version: 21
 
       - name: Run base tests
-        run: docker run --rm --workdir /github/workspace -e "SUREFIRE_RERUN_FAILING_COUNT" -v "${{ github.workspace }}":"/github/workspace" -v "$HOME/.m2":"/root/.m2" registry.access.redhat.com/ubi8/ubi:latest .github/scripts/run-fips-it.sh ${{ matrix.mode }}
+        run: docker run --rm --workdir /github/workspace -e "SUREFIRE_RERUN_FAILING_COUNT" -v "${{ github.workspace 
+          }}":"/github/workspace" -v "$HOME/.m2":"/root/.m2" registry.access.redhat.com/ubi8/ubi:latest 
+          .github/scripts/run-fips-it.sh ${{ matrix.mode }}
 
       - name: Upload JVM Heapdumps
         if: always()
@@ -888,12 +920,13 @@ jobs:
 
   forms-integration-tests:
     name: Forms IT
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     needs: build
     timeout-minutes: 75
     strategy:
       matrix:
         browser: [chrome, firefox]
+        os: *id001
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -927,8 +960,8 @@ jobs:
 
   webauthn-integration-tests:
     name: WebAuthn IT
-    if: needs.conditional.outputs.ci-webauthn == 'true'
-    runs-on: ubuntu-latest
+    if: always()
+    runs-on: ${{ matrix.os }}
     needs: build
     timeout-minutes: 45
     strategy:
@@ -936,6 +969,7 @@ jobs:
         browser:
           - chrome
           - firefox
+        os: *id001
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -1006,13 +1040,14 @@ jobs:
 
   migration-tests:
     name: Migration Tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     needs: build
     timeout-minutes: 45
     strategy:
       matrix:
         old-version: [24.0.4]
         database: [postgres, mysql, oracle, mssql, mariadb]
+        os: *id001
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -1053,7 +1088,7 @@ jobs:
 
   test-framework:
     name: Test Framework
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     needs: build
     timeout-minutes: 30
     steps:
@@ -1066,9 +1101,13 @@ jobs:
       - name: Run tests
         run: ./mvnw package -f test-framework/pom.xml
 
+    strategy:
+      matrix:
+        os: *id001
+      fail-fast: false
   base-new-integration-tests:
     name: Base IT (new)
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     needs:
       - build
     timeout-minutes: 30
@@ -1082,6 +1121,10 @@ jobs:
       - name: Run tests
         run: ./mvnw test -f tests/pom.xml
 
+    strategy:
+      matrix:
+        os: *id001
+      fail-fast: false
   check:
     name: Status Check - Keycloak CI
     if: always()
